@@ -27,6 +27,7 @@ function home(focus) {
 <div class="mlegend" id="mleg"></div>
 <div class="card" id="mread" hidden></div>
 <p class="note pad">점 하나 = 법 하나, 클수록 많이 불리는 법. 줄 = 한 법의 조가 다른 법을 부름. 분야는 맡은 부처로 나눔. 흐르는 빛은 꾸밈.</p>
+<div class="card"><h2>베틀로 보기</h2><p class="sub">법률과 그 시행령·시행규칙이 한 집안으로 짜이는 모습. 법을 열면 맨 위에 나옵니다.</p><ul class="list">${['도로교통법', '개인정보 보호법', '건축법', '근로기준법', '소득세법', '국민건강보험법'].map(n => all.find(l => l.name === n)).filter(Boolean).map(l => lawRow(l, nf(l.n) + '조')).join('')}</ul></div>
 <input type="search" id="q" placeholder="법 이름 찾기 (예: 민법, 개인정보)" autocomplete="off" enterkeyhint="search">
 <div class="card" id="res" hidden><ul class="list"></ul></div>
 <div class="card"><h2>헌법에서 시작</h2><p class="sub">모든 법의 꼭대기. 헌법이 "법률로 정한다"며 아래로 넘기는 곳을 봅니다.</p><a class="btn" href="${href(IDX.const)}">대한민국헌법 열기</a></div>
@@ -87,9 +88,58 @@ function lawPage(P) {
 <p class="pad" style="margin:0 0 10px"><a class="btn" href="#/m/${d.id}">전체 지도에서 이 법 보기</a></p>
 <div class="stats"><div class="stat"><b>${nf(P.n)}</b><span>조</span></div><div class="stat"><b>${nf(P.internal.length)}</b><span>안에서 잇는 줄</span></div><div class="stat"><b>${nf(extOut)}</b><span>밖으로 나가는 줄</span></div><div class="stat"><b>${nf(d.in.length)}</b><span>밖에서 오는 줄</span></div></div>
 ${P.n ? '' : '<p class="lead" style="margin-top:14px">본문에 조가 없는 법입니다(폐지되었거나 한 줄짜리).</p>'}
+<div id="c-loom"></div>
 ${up || down ? `<div class="card"><h2>위아래 층</h2><p class="sub">헌법 → 법률 → 시행령 → 시행규칙으로 내려가는 줄기에서 이 법의 자리.</p><div class="layers">${up}<span class="me"><i class="dot ${kc(d.kind)}"></i>${esc(d.name)}</span>${down}</div></div>` : ''}
 <div id="c-nb"></div><div id="c-arc"></div><div id="c-grid"></div><div id="c-term"></div><div id="c-list"></div>`;
-  neighbours(P); arcs(P); grid(P); terms(P); artList(P);
+  loom(P); neighbours(P); arcs(P); grid(P); terms(P); artList(P);
+}
+
+// 베틀: 법 한 집안(법률·시행령·시행규칙)을 가로줄로 놓고, 아래 법이 윗법을 받아 쓰는 실을 세로로 건다
+async function loom(P) {
+  const d = P.d, rk = x => (x.kind === '법률' || x.kind === '헌법') ? 0 : x.kind === '대통령령' ? 1 : 2, RC = ['#8fc1ff', '#ff9a5c', '#4fd6a0'], BG = '#07090d';
+  let fam;
+  try { const root = d.plaw != null ? await load(d.plaw) : d; if (!root.kids.length) return; fam = [root, ...(await Promise.all(root.kids.slice(0, 6).map(load))).sort((a, b) => rk(a) - rk(b) || b.arts.length - a.arts.length)]; } catch (e) { return; }
+  fam = fam.filter(x => x.arts.length > 1).slice(0, 4); if (CUR !== P || fam.length < 2) return;
+  const row = new Map(fam.map((x, r) => [x.id, r])), kix = fam.map(x => new Map(x.arts.map((a, i) => [a[0], i]))), T = [], A = fam.map(() => []);
+  fam.forEach((S, r) => { for (const e of S.out) { if (e[1] === -1) A[r].push([e[0], e[2]]); else if (row.has(e[1])) { const j = kix[row.get(e[1])].get(e[2]); if (j != null) T.push([r, e[0], row.get(e[1]), j]); } } });
+  $('#c-loom').innerHTML = `<div class="card"><h2>베틀 — 이 법 집안이 짜이는 모습</h2><p class="sub">가로줄 = 조를 제1조부터 차례로 놓은 것. 위로 솟은 활 = 같은 법 안에서 조가 조를 부름. 세로 실 = 아래 법이 윗법의 조를 받아 풀어 씀(${nf(T.length)}가닥).</p>
+<canvas class="loom" aria-label="법률과 시행령·시행규칙 사이에 걸린 줄"></canvas><div class="pick"></div></div>`;
+  const cv = $('#c-loom canvas'), pick = $('#c-loom .pick'), W = cv.clientWidth, pad = 12, top = 78, gy = fam.length > 3 ? 165 : 195, H = top + (fam.length - 1) * gy + 40, dpr = Math.min(devicePixelRatio || 1, 3);
+  cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px'; const c = cv.getContext('2d'); c.scale(dpr, dpr);
+  const X = (r, i) => pad + i * (W - 2 * pad) / Math.max(1, fam[r].arts.length - 1), Y = r => top + r * gy, col = r => RC[Math.min(rk(fam[r]), 2)];
+  const thread = t => { const x1 = X(t[0], t[1]), y1 = Y(t[0]), x2 = X(t[2], t[3]), y2 = Y(t[2]), my = (y1 + y2) / 2; c.moveTo(x1, y1); c.bezierCurveTo(x1, my, x2, my, x2, y2); };
+  const arc = (r, a) => { const p = X(r, Math.min(a[0], a[1])), q = X(r, Math.max(a[0], a[1])), rad = (q - p) / 2; c.moveTo(p, Y(r)); c.ellipse(p + rad, Y(r), rad, Math.min(rad, 58), 0, Math.PI, 2 * Math.PI); };
+  const stroke = (f, color, w, al) => { c.beginPath(); f(); c.strokeStyle = color; c.lineWidth = w; c.globalAlpha = al; c.stroke(); c.globalAlpha = 1; };
+  const chrome = () => fam.forEach((x, r) => { stroke(() => { c.moveTo(pad, Y(r)); c.lineTo(W - pad, Y(r)); }, col(r), 2.5, 1); c.fillStyle = col(r); c.font = `${x.id === d.id ? 800 : 600} 12px system-ui,"Noto Sans KR",sans-serif`; c.fillText(`${x.id === d.id ? '● ' : ''}${cut(x.name, 22)} · ${nf(x.arts.length)}조`, pad, Y(r) + 17); });
+  const arcsAll = () => A.forEach((as, r) => { const st = Math.ceil(as.length / 1500); stroke(() => { for (let k = 0; k < as.length; k += st) arc(r, as[k]); }, col(r), .5, .42); });
+  T.sort((a, b) => X(a[0], a[1]) - X(b[0], b[1])); const st = Math.ceil(T.length / 6000), al = T.length > 1500 ? .22 : .34; let base = null, sel = null;
+  const hint = () => { pick.innerHTML = '<span class="nm muted">그림을 좌우로 문지르면 조 하나에 걸린 실만 켜집니다.</span>'; };
+  const snap = () => { base = document.createElement('canvas'); base.width = cv.width; base.height = cv.height; base.getContext('2d').drawImage(cv, 0, 0); };
+  const full = () => { c.fillStyle = BG; c.fillRect(0, 0, W, H); arcsAll(); for (let r = 0; r < fam.length; r++) stroke(() => { for (let k = 0; k < T.length; k += st) if (T[k][0] === r) thread(T[k]); }, col(r), .6, al); chrome(); snap(); };
+  const choose = (r, i) => {
+    sel = [r, i]; c.drawImage(base, 0, 0, W, H); c.fillStyle = 'rgba(7,9,13,.72)'; c.fillRect(0, 0, W, H); chrome();
+    const up = T.filter(t => t[0] === r && t[1] === i), dn = T.filter(t => t[2] === r && t[3] === i), ar = A[r].filter(a => a[0] === i || a[1] === i);
+    stroke(() => ar.forEach(a => arc(r, a)), '#f0efec', 1, .8);
+    for (const t of [...up, ...dn]) stroke(() => thread(t), col(t[0]), 1.3, .95);
+    const dot = (rr, ii, rad, f) => { c.beginPath(); c.arc(X(rr, ii), Y(rr), rad, 0, 7); c.fillStyle = f; c.fill(); };
+    up.forEach(t => dot(t[2], t[3], 2.5, col(t[2]))); dn.forEach(t => dot(t[0], t[1], 2.5, col(t[0]))); dot(r, i, 5.5, '#f0efec');
+    const a = fam[r].arts[i]; pick.innerHTML = `<i class="dot" style="background:${col(r)}"></i><span class="nm"><b>${esc(cut(fam[r].name, 14))} ${fmt(a[0])}</b> ${esc(a[1])}<br><span class="num" style="white-space:normal">${up.length ? `윗법의 조 ${nf(up.length)}곳을 받아 씀 · ` : ''}${dn.length ? `아래 법의 조 ${nf(dn.length)}곳이 받아 감 · ` : ''}같은 법 안 ${nf(ar.length)}줄</span></span><a class="btn" href="${href(fam[r].id, a[0])}">읽기</a><button class="btn" id="lm-all">전체</button>`;
+  };
+  const deg = fam.map(x => new Uint16Array(x.arts.length)); T.forEach(t => { deg[t[0]][t[1]]++; deg[t[2]][t[3]]++; });
+  const at = ev => { if (!base) return; const b = cv.getBoundingClientRect(), x = ev.clientX - b.left, y = ev.clientY - b.top; let r = 0; for (let k = 1; k < fam.length; k++) if (Math.abs(y + 20 - Y(k)) < Math.abs(y + 20 - Y(r))) r = k;
+    const n = fam[r].arts.length; let i = Math.max(0, Math.min(n - 1, Math.round((x - pad) / (W - 2 * pad) * (n - 1)))), best = i; const reach = Math.max(1, Math.round(n / (W - 2 * pad) * 5));
+    for (let k = Math.max(0, i - reach); k <= Math.min(n - 1, i + reach); k++) if (deg[r][k] > deg[r][best]) best = k;
+    if (!sel || sel[0] !== r || sel[1] !== best) choose(r, best); };
+  cv.onpointerdown = ev => { at(ev); cv.onpointermove = at; }; cv.onpointerup = cv.onpointercancel = cv.onpointerleave = () => { cv.onpointermove = null; };
+  pick.onclick = ev => { if (ev.target.closest('#lm-all')) { sel = null; c.drawImage(base, 0, 0, W, H); hint(); } };
+  hint();
+  if (matchMedia('(prefers-reduced-motion:reduce)').matches || !T.length) return full();
+  // 실이 왼쪽부터 걸리며 짜임
+  c.fillStyle = BG; c.fillRect(0, 0, W, H); arcsAll(); chrome(); let k0 = 0; const t0 = performance.now(), dur = 1800;
+  const step = now => { if (CUR !== P || !cv.isConnected) return; const u = Math.min(1, (now - t0) / dur), k1 = Math.round(T.length * (1 - Math.pow(1 - u, 2)));
+    for (let k = k0 - k0 % st; k < k1; k += st) if (k >= k0) stroke(() => thread(T[k]), col(T[k][0]), .6, al); k0 = k1;
+    if (u < 1) requestAnimationFrame(step); else full(); };
+  requestAnimationFrame(step);
 }
 
 // 둘레 그물: 이 법을 부르는 법(왼쪽) · 이 법이 부르는 법(오른쪽)
