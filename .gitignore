@@ -1,0 +1,5 @@
+data/
+web/data/
+sketch/out/*.png
+shots/
+node_modules/
