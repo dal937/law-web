@@ -90,7 +90,7 @@ const LawMap = (() => {
       if (!adj) { adj = Array.from({ length: N }, () => []); adjW = Array.from({ length: N }, () => []); for (let k = 0; k < ne; k++) { const a = E[k * 3], b = E[k * 3 + 1], w = E[k * 3 + 2]; adj[a].push(b); adjW[a].push(w); adj[b].push(a); adjW[b].push(w); } }
       const L = IDX.laws, kin = j => L[i][6] === j || L[j][6] === i || (L[i][6] >= 0 && L[i][6] === L[j][6]);       // 딸린 시행령·시행규칙은 뺌(줄은 굵은 차례로 들어 있음)
       const top = i >= 0 ? adj[i].map((j, k) => [j, adjW[i][k]]).filter(x => !kin(x[0])) : [];
-      sel = i; selTop = top.slice(0, 6); if (i >= 0) frameSel(); onPick(i, i >= 0 ? adj[i].length : 0, i >= 0 ? m.groups[m.g[i]] : '', i >= 0 ? m.g[i] : 0, top); kick();
+      sel = i; selTop = top.slice(0, 6); if (i >= 0) frameSel(); onPick(i, i >= 0 ? adj[i].length : 0, i >= 0 ? m.groups[m.g[i]] : '', i >= 0 ? m.g[i] : 0, top, m.g); kick();
     }
     // 고른 법과 많이 주고받는 법 여섯이 한 화면에 들게 자리를 옮김
     function frameSel() { const ids = [sel, ...selTop.map(x => x[0])], xs = ids.map(i => m.x[i]), ys = ids.map(i => m.y[i]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);

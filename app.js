@@ -38,11 +38,11 @@ function home(focus) {
   let NB = [];
   mp.onclick = ev => { const b = ev.target.closest('button[data-i]'); if (b) $('.map').focus(+b.dataset.i);
     else if (ev.target.closest('#nb-more')) openSheet(`<h2>${esc(NB.name)}와 많이 주고받는 법</h2><p class="muted" style="font-size:13px">서로 부른 횟수가 많은 차례. 딸린 시행령·시행규칙은 뺌.</p><ul class="list">${NB.slice(0, 200).map(([j, w]) => lawRow(L(j), nf(w) + (w >= 999 ? '번+' : '번'))).join('')}</ul>`); };
-  LawMap.mount($('.map'), IDX, (i, nb, grp, gi, top) => {
+  LawMap.mount($('.map'), IDX, (i, nb, grp, gi, top, G) => {
     if (i < 0) return;
     const l = L(i); NB = top; NB.name = l.name;
     mp.innerHTML = `<i class="dot" style="background:${LawMap.COL[gi]}"></i><span class="nm">${esc(l.name)}<br><span class="num">${esc(l.kind)} · ${esc(grp)} · 이어진 법 ${nf(nb)}개</span></span><a class="btn" href="${href(i)}">열기</a>
-<div class="nbs">${top.length ? `<span class="num">많이 주고받는 법 — 누르면 그 법으로 옮겨 감</span>${top.slice(0, 6).map(([j, w]) => `<button class="btn" data-i="${j}"><i style="background:${LawMap.COL[MAPG[j]]}"></i>${esc(cut(L(j).name, 14))} <span class="num">${nf(w)}</span></button>`).join('')}${top.length > 6 ? `<button class="btn" id="nb-more">외 ${nf(top.length - 6)}개</button>` : ''}` : '<span class="num">두 번 넘게 주고받는 다른 법이 없습니다.</span>'}</div>`;
+<div class="nbs">${top.length ? `<span class="num">많이 주고받는 법 — 누르면 그 법으로 옮겨 감</span>${top.slice(0, 6).map(([j, w]) => `<button class="btn" data-i="${j}"><i style="background:${LawMap.COL[G[j]]}"></i>${esc(cut(L(j).name, 14))} <span class="num">${nf(w)}</span></button>`).join('')}${top.length > 6 ? `<button class="btn" id="nb-more">외 ${nf(top.length - 6)}개</button>` : ''}` : '<span class="num">두 번 넘게 주고받는 다른 법이 없습니다.</span>'}</div>`;
   }, focus, g => {
     if (g < 0 || !MAPM) { mp.innerHTML = `<span class="nm muted">가운데가 헌법, 둘레 여덟 덩어리가 분야입니다. 덩어리를 누르면 그 분야로 들어갑니다.</span>`; return; }
     const m = MAPM, top = all.filter(l => m.g[l.id] === g).sort((a, b) => b.ind - a.ind).slice(0, 3), to = m.flow[g].map((n, k) => [k, n + m.flow[k][g]]).filter(x => x[0] !== g).sort((a, b) => b[1] - a[1])[0];
