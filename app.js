@@ -35,9 +35,14 @@ function home(focus) {
 <div class="legend"><span><i class="k1"></i>헌법·법률</span><span><i class="k2"></i>대통령령</span><span><i class="k3"></i>부령·그 밖 규칙</span></div></div>
 <p class="note pad">자료: 법제처 국가법령정보센터 공개 자료(legalize-kr 저장소, ${esc(IDX.made)} 기준). 줄은 글자 규칙으로 뽑아 빠지거나 틀린 것이 있을 수 있습니다.</p>`;
   const mp = $('.mpick');
-  LawMap.mount($('.map'), IDX, (i, nb, grp, gi) => {
+  let NB = [];
+  mp.onclick = ev => { const b = ev.target.closest('button[data-i]'); if (b) $('.map').focus(+b.dataset.i);
+    else if (ev.target.closest('#nb-more')) openSheet(`<h2>${esc(NB.name)}와 많이 주고받는 법</h2><p class="muted" style="font-size:13px">서로 부른 횟수가 많은 차례. 딸린 시행령·시행규칙은 뺌.</p><ul class="list">${NB.slice(0, 200).map(([j, w]) => lawRow(L(j), nf(w) + (w >= 999 ? '번+' : '번'))).join('')}</ul>`); };
+  LawMap.mount($('.map'), IDX, (i, nb, grp, gi, top) => {
     if (i < 0) return;
-    const l = L(i); mp.innerHTML = `<i class="dot" style="background:${LawMap.COL[gi]}"></i><span class="nm">${esc(l.name)}<br><span class="num">${esc(l.kind)} · ${esc(grp)} · 이어진 법 ${nf(nb)}개</span></span><a class="btn" href="${href(i)}">열기</a>`;
+    const l = L(i); NB = top; NB.name = l.name;
+    mp.innerHTML = `<i class="dot" style="background:${LawMap.COL[gi]}"></i><span class="nm">${esc(l.name)}<br><span class="num">${esc(l.kind)} · ${esc(grp)} · 이어진 법 ${nf(nb)}개</span></span><a class="btn" href="${href(i)}">열기</a>
+<div class="nbs">${top.length ? `<span class="num">많이 주고받는 법 — 누르면 그 법으로 옮겨 감</span>${top.slice(0, 6).map(([j, w]) => `<button class="btn" data-i="${j}"><i style="background:${LawMap.COL[MAPG[j]]}"></i>${esc(cut(L(j).name, 14))} <span class="num">${nf(w)}</span></button>`).join('')}${top.length > 6 ? `<button class="btn" id="nb-more">외 ${nf(top.length - 6)}개</button>` : ''}` : '<span class="num">두 번 넘게 주고받는 다른 법이 없습니다.</span>'}</div>`;
   }, focus, g => {
     if (g < 0 || !MAPM) { mp.innerHTML = `<span class="nm muted">가운데가 헌법, 둘레 여덟 덩어리가 분야입니다. 덩어리를 누르면 그 분야로 들어갑니다.</span>`; return; }
     const m = MAPM, top = all.filter(l => m.g[l.id] === g).sort((a, b) => b.ind - a.ind).slice(0, 3), to = m.flow[g].map((n, k) => [k, n + m.flow[k][g]]).filter(x => x[0] !== g).sort((a, b) => b[1] - a[1])[0];
@@ -96,47 +101,86 @@ ${up || down ? `<div class="card"><h2>위아래 층</h2><p class="sub">헌법 �
 
 // 베틀: 법 한 집안(법률·시행령·시행규칙)을 가로줄로 놓고, 아래 법이 윗법을 받아 쓰는 실을 세로로 건다
 async function loom(P) {
-  const d = P.d, rk = x => (x.kind === '법률' || x.kind === '헌법') ? 0 : x.kind === '대통령령' ? 1 : 2, RC = ['#8fc1ff', '#ff9a5c', '#4fd6a0'], BG = '#07090d';
+  const d = P.d, rk = x => (x.kind === '법률' || x.kind === '헌법') ? 0 : x.kind === '대통령령' ? 1 : 2, RC = ['#8fc1ff', '#ff9a5c', '#4fd6a0'], BG = '#07090d', RED = '#ff6b6b';
   let fam;
   try { const root = d.plaw != null ? await load(d.plaw) : d; if (!root.kids.length) return; fam = [root, ...(await Promise.all(root.kids.slice(0, 6).map(load))).sort((a, b) => rk(a) - rk(b) || b.arts.length - a.arts.length)]; } catch (e) { return; }
-  fam = fam.filter(x => x.arts.length > 1).slice(0, 4); if (CUR !== P || fam.length < 2) return;
+  fam = fam.filter((x, r) => !r || x.arts.length > 1).slice(0, 4); if (CUR !== P || fam.length < 2 || fam[0].arts.length < 2) return;
   const row = new Map(fam.map((x, r) => [x.id, r])), kix = fam.map(x => new Map(x.arts.map((a, i) => [a[0], i]))), T = [], A = fam.map(() => []);
   fam.forEach((S, r) => { for (const e of S.out) { if (e[1] === -1) A[r].push([e[0], e[2]]); else if (row.has(e[1])) { const j = kix[row.get(e[1])].get(e[2]); if (j != null) T.push([r, e[0], row.get(e[1]), j]); } } });
-  $('#c-loom').innerHTML = `<div class="card"><h2>베틀 — 이 법 집안이 짜이는 모습</h2><p class="sub">가로줄 = 조를 제1조부터 차례로 놓은 것. 위로 솟은 활 = 같은 법 안에서 조가 조를 부름. 세로 실 = 아래 법이 윗법의 조를 받아 풀어 씀(${nf(T.length)}가닥).</p>
-<canvas class="loom" aria-label="법률과 시행령·시행규칙 사이에 걸린 줄"></canvas><div class="pick"></div></div>`;
-  const cv = $('#c-loom canvas'), pick = $('#c-loom .pick'), W = cv.clientWidth, pad = 12, top = 78, gy = fam.length > 3 ? 165 : 195, H = top + (fam.length - 1) * gy + 40, dpr = Math.min(devicePixelRatio || 1, 3);
+  // 읽을거리 셈: 대목(장), 받아 쓰인 조, 벌칙이 가리키는 조, 시행령 차례
+  const root = fam[0], n0 = root.arts.length, chapOf = (x, i) => { const a = x.arts[i]; return a[2] >= 0 ? x.chaps[a[2]].split(' › ')[0] : ''; }, short = s => cut(s.replace(/^제\d+(?:편|장|절)(?:의\d+)?\s*/, '') || s, 16);
+  const bounds = fam.map(x => { const b = []; for (let i = 1; i < x.arts.length; i++) if (chapOf(x, i) !== chapOf(x, i - 1)) b.push(i); return b; });
+  const CH = []; root.arts.forEach((a, i) => { const c = chapOf(root, i); if (!CH.length || CH[CH.length - 1].c !== c) CH.push({ c, i0: i, i1: i, t: 0 }); else CH[CH.length - 1].i1 = i; });
+  const chIx = new Uint16Array(n0); CH.forEach((h, k) => { for (let i = h.i0; i <= h.i1; i++) chIx[i] = k; });
+  const recv = new Uint16Array(n0); T.forEach(t => { if (t[2] === 0) { recv[t[3]]++; CH[chIx[t[3]]].t++; } });
+  const live = CH.filter(h => h.c && !/삭제/.test(h.c)), isPen = i => /벌칙|과태료|양벌/.test(root.arts[i][1]) || chapOf(root, i).includes('벌칙');
+  const penA = A[0].filter(a => isPen(a[0]) && !isPen(a[1])), penT = new Map(); penA.forEach(a => penT.set(a[1], (penT.get(a[1]) || 0) + 1));
+  const an = (r, i) => `${fmt(fam[r].arts[i][0])} ${esc(cut(fam[r].arts[i][1], 18))}`, READ = [], down = T.filter(t => t[2] === 0);
+  if (down.length) { const got = recv.reduce((s, v) => s + (v > 0), 0), top = recv.indexOf(Math.max(...recv));
+    READ.push([`<b>${esc(root.name)}</b> ${nf(n0)}조 가운데 <b>${nf(got)}조(${Math.round(got / n0 * 100)}%)</b>는 아래 법이 받아 풀어 씁니다 — 법률만 읽어서는 끝나지 않는 조들.`, () => lit(down, [], null, `아래 법이 받아 쓰는 실 ${nf(down.length)}가닥`)]);
+    READ.push([`가장 많이 받아 쓰인 조는 <b>${an(0, top)}</b> — 아래 법의 조 ${nf(recv[top])}곳이 이 조를 풀어 씁니다.`, () => choose(0, top)]); }
+  if (live.length >= 3 && down.length) { const best = live.slice().sort((a, b) => b.t / (b.i1 - b.i0 + 1) - a.t / (a.i1 - a.i0 + 1))[0], none = live.filter(h => !h.t);
+    READ.push([`아래로 가장 촘촘히 넘긴 대목은 <b>${esc(short(best.c))}</b>(조 ${best.i1 - best.i0 + 1}개에 실 ${nf(best.t)}가닥)${none.length ? ` · 하나도 안 넘긴 대목은 ${none.slice(0, 3).map(h => esc(short(h.c))).join(', ')}` : ''}.`, () => chapter(CH.indexOf(best))]); }
+  if (penT.size >= 10 && penA.length / A[0].length >= .1) { const tp = [...penT].sort((a, b) => b[1] - a[1])[0][0];
+    READ.push([`<b>벌칙</b> 조들이 앞의 조 <b>${nf(penT.size)}개</b>를 가리킵니다 — 어기면 벌이 따르는 조들(법 안 활의 ${Math.round(penA.length / A[0].length * 100)}%). 가장 여러 번 걸린 조는 ${an(0, tp)}.`, () => lit([], penA.map(a => [0, a]), null, `벌칙이 가리키는 조 ${nf(penT.size)}개 — 붉은 활`, RED)]); }
+  const r1 = fam.findIndex(x => rk(x) === 1), pr = r1 > 0 ? T.filter(t => t[0] === r1 && t[2] === 0) : [];
+  if (pr.length >= 20) { const xs = pr.map(t => t[1]), ys = pr.map(t => t[3]), mean = v => v.reduce((a, b) => a + b, 0) / v.length, mx = mean(xs), my = mean(ys); let sxy = 0, sxx = 0, syy = 0; xs.forEach((x, k) => { sxy += (x - mx) * (ys[k] - my); sxx += (x - mx) ** 2; syy += (ys[k] - my) ** 2; }); const cor = sxy / Math.sqrt(sxx * syy || 1);
+    if (cor >= .8) READ.push(['<b>시행령</b>은 법률의 차례를 거의 그대로 따라 씁니다 — 주황 실이 곧게 내려가는 까닭. 법률 조 옆에 시행령 조를 나란히 놓고 읽으면 됩니다.', () => lit(pr, [], null, `시행령이 법률을 받아 쓰는 실 ${nf(pr.length)}가닥`)]); }
+  const mxT = Math.max(1, ...live.map(h => h.t));
+  $('#c-loom').innerHTML = `<div class="card"><h2>베틀 — 이 법 집안이 짜이는 모습</h2><p class="sub">가로줄 = 조를 제1조부터 차례로(끊긴 곳이 장의 경계). 위로 솟은 활 = 같은 법 안에서 조가 조를 부름. 세로 실 = 아래 법이 윗법의 조를 받아 풀어 씀(${nf(T.length)}가닥).</p>
+<canvas class="loom" aria-label="법률과 시행령·시행규칙 사이에 걸린 줄"></canvas><div class="lsel"></div>
+${READ.length ? `<h3>이 그림에서 읽히는 것 <span class="num" style="font-weight:400">누르면 그 부분이 켜짐</span></h3><ul class="list lread">${READ.map((x, k) => `<li><button data-read="${k}"><span class="nm">${x[0]}</span></button></li>`).join('')}</ul>` : ''}
+${live.length >= 2 ? `<h3>대목별 — 어디를 아래 법에 넘겼나</h3><ul class="list lch">${live.map(h => `<li><button data-ch="${CH.indexOf(h)}"><span class="nm">${esc(short(h.c))}</span><span class="lbar"><i style="width:${(h.t / mxT * 100).toFixed(0)}%"></i></span><span class="num">${h.i1 - h.i0 + 1}조 · ${nf(h.t)}가닥</span></button></li>`).join('')}</ul>` : ''}</div>`;
+  const host = $('#c-loom'), cv = $('canvas', host), box = $('.lsel', host), W = cv.clientWidth, pad = 12, top = 78, gy = fam.length > 3 ? 165 : 195, H = top + (fam.length - 1) * gy + 40, dpr = Math.min(devicePixelRatio || 1, 3);
   cv.width = W * dpr; cv.height = H * dpr; cv.style.height = H + 'px'; const c = cv.getContext('2d'); c.scale(dpr, dpr);
   const X = (r, i) => pad + i * (W - 2 * pad) / Math.max(1, fam[r].arts.length - 1), Y = r => top + r * gy, col = r => RC[Math.min(rk(fam[r]), 2)];
   const thread = t => { const x1 = X(t[0], t[1]), y1 = Y(t[0]), x2 = X(t[2], t[3]), y2 = Y(t[2]), my = (y1 + y2) / 2; c.moveTo(x1, y1); c.bezierCurveTo(x1, my, x2, my, x2, y2); };
   const arc = (r, a) => { const p = X(r, Math.min(a[0], a[1])), q = X(r, Math.max(a[0], a[1])), rad = (q - p) / 2; c.moveTo(p, Y(r)); c.ellipse(p + rad, Y(r), rad, Math.min(rad, 58), 0, Math.PI, 2 * Math.PI); };
   const stroke = (f, color, w, al) => { c.beginPath(); f(); c.strokeStyle = color; c.lineWidth = w; c.globalAlpha = al; c.stroke(); c.globalAlpha = 1; };
-  const chrome = () => fam.forEach((x, r) => { stroke(() => { c.moveTo(pad, Y(r)); c.lineTo(W - pad, Y(r)); }, col(r), 2.5, 1); c.fillStyle = col(r); c.font = `${x.id === d.id ? 800 : 600} 12px system-ui,"Noto Sans KR",sans-serif`; c.fillText(`${x.id === d.id ? '● ' : ''}${cut(x.name, 22)} · ${nf(x.arts.length)}조`, pad, Y(r) + 17); });
+  const chrome = () => fam.forEach((x, r) => { stroke(() => { c.moveTo(pad, Y(r)); c.lineTo(W - pad, Y(r)); }, col(r), 2.5, 1);
+    stroke(() => bounds[r].forEach(i => { const bx = (X(r, i - 1) + X(r, i)) / 2; c.moveTo(bx, Y(r) - 5); c.lineTo(bx, Y(r) + 5); }), BG, 2, 1);
+    c.fillStyle = col(r); c.font = `${x.id === d.id ? 800 : 600} 12px system-ui,"Noto Sans KR",sans-serif`; c.fillText(`${x.id === d.id ? '● ' : ''}${cut(x.name, 22)} · ${nf(x.arts.length)}조`, pad, Y(r) + 19); });
   const arcsAll = () => A.forEach((as, r) => { const st = Math.ceil(as.length / 1500); stroke(() => { for (let k = 0; k < as.length; k += st) arc(r, as[k]); }, col(r), .5, .42); });
   T.sort((a, b) => X(a[0], a[1]) - X(b[0], b[1])); const st = Math.ceil(T.length / 6000), al = T.length > 1500 ? .22 : .34; let base = null, sel = null;
-  const hint = () => { pick.innerHTML = '<span class="nm muted">그림을 좌우로 문지르면 조 하나에 걸린 실만 켜집니다.</span>'; };
+  const hint = () => { sel = null; box.innerHTML = '<div class="pick"><span class="nm muted">그림을 누르거나 좌우로 문지르면 조 하나에 걸린 실과 이어진 조 이름이 나옵니다.</span></div>'; };
   const snap = () => { base = document.createElement('canvas'); base.width = cv.width; base.height = cv.height; base.getContext('2d').drawImage(cv, 0, 0); };
   const full = () => { c.fillStyle = BG; c.fillRect(0, 0, W, H); arcsAll(); for (let r = 0; r < fam.length; r++) stroke(() => { for (let k = 0; k < T.length; k += st) if (T[k][0] === r) thread(T[k]); }, col(r), .6, al); chrome(); snap(); };
-  const choose = (r, i) => {
-    sel = [r, i]; c.drawImage(base, 0, 0, W, H); c.fillStyle = 'rgba(7,9,13,.72)'; c.fillRect(0, 0, W, H); chrome();
+  const dot = (r, i, rad, f) => { c.beginPath(); c.arc(X(r, i), Y(r), rad, 0, 7); c.fillStyle = f; c.fill(); };
+  // 켜기: 실(ts)·활(as = [줄, 활])만 밝히고 나머지는 어둡게
+  function lit(ts, as, mark, label, acol = '#f0efec', seg) {
+    if (!base) full(); c.drawImage(base, 0, 0, W, H); c.fillStyle = 'rgba(7,9,13,.74)'; c.fillRect(0, 0, W, H); chrome();
+    stroke(() => as.forEach(a => arc(a[0], a[1])), acol, as.length > 40 ? .8 : 1.1, .85);
+    for (let r = 0; r < fam.length; r++) stroke(() => ts.forEach(t => { if (t[0] === r) thread(t); }), col(r), ts.length > 60 ? .8 : 1.4, .92);
+    if (ts.length <= 60) ts.forEach(t => { dot(t[2], t[3], 2.5, col(t[2])); dot(t[0], t[1], 2.5, col(t[0])); });
+    if (seg) stroke(() => { c.moveTo(X(0, seg[0]), Y(0)); c.lineTo(X(0, seg[1]), Y(0)); }, '#ffffff', 4, 1);
+    if (mark) dot(mark[0], mark[1], 5.5, '#f0efec');
+    if (label != null) { sel = null; box.innerHTML = `<div class="pick"><span class="nm">${label}</span><button class="btn" id="lm-all">전체</button></div>`; }
+  }
+  const hop = (title, items) => { const seen = new Set(), u = items.filter(([r, i]) => !seen.has(r + '_' + i) && seen.add(r + '_' + i)); return u.length ? `<h4>${title} ${u.length}</h4><ul class="list">${u.slice(0, 6).map(([r, i, tag]) => `<li><button data-r="${r}" data-i="${i}"><i class="dot" style="background:${col(r)}"></i><span class="nm">${an(r, i)}</span>${tag ? `<span class="tag">${tag}</span>` : ''}</button></li>`).join('')}${u.length > 6 ? `<li><span class="note">외 ${nf(u.length - 6)}개 — '읽기'에서 모두 봅니다</span></li>` : ''}</ul>` : ''; };
+  function choose(r, i) {
     const up = T.filter(t => t[0] === r && t[1] === i), dn = T.filter(t => t[2] === r && t[3] === i), ar = A[r].filter(a => a[0] === i || a[1] === i);
-    stroke(() => ar.forEach(a => arc(r, a)), '#f0efec', 1, .8);
-    for (const t of [...up, ...dn]) stroke(() => thread(t), col(t[0]), 1.3, .95);
-    const dot = (rr, ii, rad, f) => { c.beginPath(); c.arc(X(rr, ii), Y(rr), rad, 0, 7); c.fillStyle = f; c.fill(); };
-    up.forEach(t => dot(t[2], t[3], 2.5, col(t[2]))); dn.forEach(t => dot(t[0], t[1], 2.5, col(t[0]))); dot(r, i, 5.5, '#f0efec');
-    const a = fam[r].arts[i]; pick.innerHTML = `<i class="dot" style="background:${col(r)}"></i><span class="nm"><b>${esc(cut(fam[r].name, 14))} ${fmt(a[0])}</b> ${esc(a[1])}<br><span class="num" style="white-space:normal">${up.length ? `윗법의 조 ${nf(up.length)}곳을 받아 씀 · ` : ''}${dn.length ? `아래 법의 조 ${nf(dn.length)}곳이 받아 감 · ` : ''}같은 법 안 ${nf(ar.length)}줄</span></span><a class="btn" href="${href(fam[r].id, a[0])}">읽기</a><button class="btn" id="lm-all">전체</button>`;
-  };
+    lit([...up, ...dn], ar.map(a => [r, a]), [r, i], null); sel = [r, i];
+    const a = fam[r].arts[i], ch = chapOf(fam[r], i), nm2 = k => esc(cut(fam[k].name.replace(root.name, '').trim() || fam[k].name, 8));
+    box.innerHTML = `<div class="pick"><i class="dot" style="background:${col(r)}"></i><span class="nm"><b>${esc(cut(fam[r].name, 16))} ${fmt(a[0])}</b> ${esc(a[1])}${ch ? `<br><span class="num" style="white-space:normal">${esc(ch)}</span>` : ''}</span><a class="btn" href="${href(fam[r].id, a[0])}">읽기</a><button class="btn" id="lm-all">전체</button></div>
+${hop('이 조가 받아 쓰는 윗법의 조', up.map(t => [t[2], t[3], nm2(t[2])]))}${hop('이 조를 받아 풀어 쓰는 아래 법의 조', dn.map(t => [t[0], t[1], nm2(t[0])]))}${hop('같은 법 안에서 이어진 조', ar.map(x => x[0] === i ? [r, x[1], '가리킴'] : [r, x[0], isPen(x[0]) && r === 0 ? '벌칙' : '가리켜짐']))}
+${!(up.length + dn.length + ar.length) ? '<p class="note">이 조에는 걸린 실이 없습니다 — 다른 조에 기대지 않고 혼자 서는 조.</p>' : ''}<p class="note">이어진 조를 누르면 그 조로 옮겨 갑니다.</p>`;
+  }
+  function chapter(k) { const h = CH[k], inC = i => i >= h.i0 && i <= h.i1, ts = down.filter(t => inC(t[3])), tops = [...new Set(ts.map(t => t[3]))].sort((a, b) => recv[b] - recv[a]);
+    lit(ts, A[0].filter(a => inC(a[0]) || inC(a[1])).map(a => [0, a]), null, null, '#f0efec', [h.i0, h.i1]); sel = null;
+    box.innerHTML = `<div class="pick"><span class="nm"><b>${esc(h.c)}</b><br><span class="num" style="white-space:normal">${fmt(root.arts[h.i0][0])}–${fmt(root.arts[h.i1][0])} · 조 ${h.i1 - h.i0 + 1}개 · 아래 법이 받아 쓴 실 ${nf(ts.length)}가닥</span></span><button class="btn" id="lm-all">전체</button></div>${hop('이 대목에서 많이 받아 쓰인 조', tops.map(i => [0, i, recv[i] + '곳']))}`; }
   const deg = fam.map(x => new Uint16Array(x.arts.length)); T.forEach(t => { deg[t[0]][t[1]]++; deg[t[2]][t[3]]++; });
   const at = ev => { if (!base) return; const b = cv.getBoundingClientRect(), x = ev.clientX - b.left, y = ev.clientY - b.top; let r = 0; for (let k = 1; k < fam.length; k++) if (Math.abs(y + 20 - Y(k)) < Math.abs(y + 20 - Y(r))) r = k;
     const n = fam[r].arts.length; let i = Math.max(0, Math.min(n - 1, Math.round((x - pad) / (W - 2 * pad) * (n - 1)))), best = i; const reach = Math.max(1, Math.round(n / (W - 2 * pad) * 5));
     for (let k = Math.max(0, i - reach); k <= Math.min(n - 1, i + reach); k++) if (deg[r][k] > deg[r][best]) best = k;
     if (!sel || sel[0] !== r || sel[1] !== best) choose(r, best); };
   cv.onpointerdown = ev => { at(ev); cv.onpointermove = at; }; cv.onpointerup = cv.onpointercancel = cv.onpointerleave = () => { cv.onpointermove = null; };
-  pick.onclick = ev => { if (ev.target.closest('#lm-all')) { sel = null; c.drawImage(base, 0, 0, W, H); hint(); } };
+  host.onclick = ev => { const h = ev.target.closest('button[data-r]'), rd = ev.target.closest('button[data-read]'), ch = ev.target.closest('button[data-ch]'), show = () => cv.scrollIntoView({ block: 'nearest' });
+    if (ev.target.closest('#lm-all')) { c.drawImage(base, 0, 0, W, H); hint(); } else if (h) choose(+h.dataset.r, +h.dataset.i); else if (rd) { READ[+rd.dataset.read][1](); show(); } else if (ch) { chapter(+ch.dataset.ch); show(); } };
   hint();
   if (matchMedia('(prefers-reduced-motion:reduce)').matches || !T.length) return full();
   // 실이 왼쪽부터 걸리며 짜임
   c.fillStyle = BG; c.fillRect(0, 0, W, H); arcsAll(); chrome(); let k0 = 0; const t0 = performance.now(), dur = 1800;
-  const step = now => { if (CUR !== P || !cv.isConnected) return; const u = Math.min(1, (now - t0) / dur), k1 = Math.round(T.length * (1 - Math.pow(1 - u, 2)));
+  const step = now => { if (CUR !== P || !cv.isConnected || base) return; const u = Math.max(0, Math.min(1, (now - t0) / dur)), k1 = Math.round(T.length * (1 - Math.pow(1 - u, 2)));
     for (let k = k0 - k0 % st; k < k1; k += st) if (k >= k0) stroke(() => thread(T[k]), col(T[k][0]), .6, al); k0 = k1;
     if (u < 1) requestAnimationFrame(step); else full(); };
   requestAnimationFrame(step);
