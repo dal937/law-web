@@ -41,4 +41,6 @@ h3{font-size:14px;margin:16px 0 2px}.tag{font-size:11px;border:1px solid var(--b
 .mlegend .btn{display:inline-flex;align-items:center;padding:6px 10px;font-size:12.5px}
 .map .ttl{display:none}
 canvas.loom{display:block;width:100%;border-radius:10px;background:#07090d;touch-action:pan-y}
-#c-loom .pick{flex-wrap:wrap}#c-loom .pick .nm{flex:1 1 100%}
+.mpick{flex-wrap:wrap}.nbs{flex:1 1 100%;display:flex;flex-wrap:wrap;gap:6px;align-items:center}.nbs>.num{flex:1 1 100%;white-space:normal}.nbs .btn{display:inline-flex;align-items:center;gap:5px;padding:6px 10px;font-size:12.5px}.nbs .btn i{width:8px;height:8px;border-radius:50%}
+.lsel .pick{flex-wrap:wrap}.lsel .pick .nm{flex:1 1 60%}.lsel h4{font-size:12.5px;margin:10px 0 0;color:var(--ink2)}.lsel ul.list li button{padding:8px 2px;font-size:14px;align-items:center}
+.lread li button{font-size:14px;line-height:1.5}.lch li button{align-items:center;padding:8px 2px;font-size:13.5px}.lbar{flex:0 0 64px;height:6px;border-radius:99px;background:var(--s0);overflow:hidden}.lbar i{display:block;height:100%;background:var(--k2)}

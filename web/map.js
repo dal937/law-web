@@ -13,7 +13,7 @@ const LawMap = (() => {
     const cv = box.querySelector('canvas'), ctx = cv.getContext('2d'), base = document.createElement('canvas'), bx = base.getContext('2d');
     const dpr = Math.min(2, devicePixelRatio || 1); let W = 0, H = 0;
     const V = { s: 1, x: 0, y: 0 }, B = { s: 1, x: 0, y: 0 };       // V = 지금 보는 자리, B = 바탕 그림을 그린 자리
-    let sel = -1, adj = null, timer = 0;
+    let sel = -1, adj = null, adjW = null, selTop = [], timer = 0;
     const order = [...Array(N).keys()].sort((a, b) => IDX.laws[b][4] - IDX.laws[a][4]);
     const sx = i => m.x[i] * V.s + V.x, sy = i => m.y[i] * V.s + V.y;
     const zoom0 = () => V.s / fit;
@@ -69,11 +69,17 @@ const LawMap = (() => {
       for (let i = 0; i < P.length; i++) { const p = P[i]; p.t += p.v; if (p.t >= 1) { P[i] = spawn(); continue; }
         const x = sx(p.a) + (sx(p.b) - sx(p.a)) * p.t, y = sy(p.a) + (sy(p.b) - sy(p.a)) * p.t; if (x < 0 || y < 0 || x > W || y > H) continue;
         ctx.globalAlpha = Math.sin(p.t * Math.PI) * .9; ctx.fillStyle = COL[m.g[p.a]]; ctx.beginPath(); ctx.arc(x, y, 1.5 * dpr, 0, 6.3); ctx.fill(); }
-      if (sel >= 0) {                                         // 고른 법과 그 줄
-        ctx.globalAlpha = .55; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = .8 * dpr; ctx.beginPath();
+      if (sel >= 0) {                                         // 고른 법과 그 줄: 바탕을 어둡게 하고, 많이 주고받는 법은 이름을 띄움
+        ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = .58; ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
+        const many = adj[sel].length > 150; ctx.globalAlpha = many ? .1 : .4; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = .7 * dpr; ctx.beginPath();
         for (const j of adj[sel]) { ctx.moveTo(sx(sel), sy(sel)); ctx.lineTo(sx(j), sy(j)); } ctx.stroke();
-        ctx.globalAlpha = 1; ctx.fillStyle = '#ffffff'; ctx.beginPath(); for (const j of adj[sel]) { ctx.moveTo(sx(j), sy(j)); ctx.arc(sx(j), sy(j), 1.6 * dpr, 0, 6.3); } ctx.fill();
-        ctx.globalCompositeOperation = 'source-over'; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.arc(sx(sel), sy(sel), rad(sel) + 4 * dpr, 0, 6.3); ctx.stroke();
+        ctx.globalAlpha = many ? .45 : .9; ctx.beginPath(); for (const j of adj[sel]) { ctx.fillStyle = '#ffffff'; ctx.moveTo(sx(j), sy(j)); ctx.arc(sx(j), sy(j), 1.6 * dpr, 0, 6.3); } ctx.fill();
+        ctx.globalAlpha = 1; ctx.font = `600 ${11.5 * dpr}px system-ui,"Noto Sans KR","WenQuanYi Zen Hei",sans-serif`; ctx.textAlign = 'center'; const boxes = [];
+        const name = (i, bold) => { const x = sx(i), y = sy(i); if (x < 20 || y < 14 || x > W - 20 || y > H - 6) return; const n = IDX.laws[i][0], t = n.length > 13 ? n.slice(0, 12) + '…' : n, w = ctx.measureText(t).width / 2 + 4, yy = y - rad(i) - 7 * dpr;
+          if (boxes.some(b => Math.abs(b[0] - x) < b[2] + w && Math.abs(b[1] - yy) < 14 * dpr)) return; boxes.push([x, yy, w]); ctx.strokeStyle = BG; ctx.lineWidth = 3.5 * dpr; ctx.strokeText(t, x, yy); ctx.fillStyle = bold ? '#ffffff' : COL[m.g[i]]; ctx.fillText(t, x, yy); };
+        ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.arc(sx(sel), sy(sel), rad(sel) + 4 * dpr, 0, 6.3); ctx.stroke(); name(sel, true);
+        for (const [j] of selTop) { ctx.strokeStyle = COL[m.g[j]]; ctx.lineWidth = 1.8 * dpr; ctx.globalAlpha = .95; ctx.beginPath(); ctx.moveTo(sx(sel), sy(sel)); ctx.lineTo(sx(j), sy(j)); ctx.stroke(); ctx.fillStyle = COL[m.g[j]]; ctx.beginPath(); ctx.arc(sx(j), sy(j), 3.2 * dpr, 0, 6.3); ctx.fill(); }
+        for (const [j] of selTop) name(j, false);
       }
       raf = (still && sel < 0 && !moving) ? 0 : requestAnimationFrame(frame);
     }
@@ -81,9 +87,15 @@ const LawMap = (() => {
     const kick = () => { if (!raf && alive) raf = requestAnimationFrame(frame); };
     const settle = () => { clearTimeout(timer); timer = setTimeout(() => { moving = false; drawBase(); kick(); }, 140); };
     function pick(i) {
-      if (!adj) { adj = Array.from({ length: N }, () => []); for (let k = 0; k < ne; k++) { adj[E[k * 3]].push(E[k * 3 + 1]); adj[E[k * 3 + 1]].push(E[k * 3]); } }
-      sel = i; onPick(i, i >= 0 ? adj[i].length : 0, i >= 0 ? m.groups[m.g[i]] : '', i >= 0 ? m.g[i] : 0); kick();
+      if (!adj) { adj = Array.from({ length: N }, () => []); adjW = Array.from({ length: N }, () => []); for (let k = 0; k < ne; k++) { const a = E[k * 3], b = E[k * 3 + 1], w = E[k * 3 + 2]; adj[a].push(b); adjW[a].push(w); adj[b].push(a); adjW[b].push(w); } }
+      const L = IDX.laws, kin = j => L[i][6] === j || L[j][6] === i || (L[i][6] >= 0 && L[i][6] === L[j][6]);       // 딸린 시행령·시행규칙은 뺌(줄은 굵은 차례로 들어 있음)
+      const top = i >= 0 ? adj[i].map((j, k) => [j, adjW[i][k]]).filter(x => !kin(x[0])) : [];
+      sel = i; selTop = top.slice(0, 6); if (i >= 0) frameSel(); onPick(i, i >= 0 ? adj[i].length : 0, i >= 0 ? m.groups[m.g[i]] : '', i >= 0 ? m.g[i] : 0, top); kick();
     }
+    // 고른 법과 많이 주고받는 법 여섯이 한 화면에 들게 자리를 옮김
+    function frameSel() { const ids = [sel, ...selTop.map(x => x[0])], xs = ids.map(i => m.x[i]), ys = ids.map(i => m.y[i]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      V.s = Math.max(fit * 1.9, Math.min(fit * 9, W * .7 / Math.max(1, x1 - x0), H * .7 / Math.max(1, y1 - y0))); V.x = W / 2 - (x0 + x1) / 2 * V.s; V.y = H / 2 - (y0 + y1) / 2 * V.s; moving = true; settle(); }
+    box.focus = i => { pick(i); };
     function zoomAt(px, py, f) { const s = Math.max(fit * .7, Math.min(fit * 60, V.s * f)); f = s / V.s; V.x = px - (px - V.x) * f; V.y = py - (py - V.y) * f; V.s = s; moving = true; kick(); settle(); }
     // 손가락: 하나로 끌기, 둘로 벌려 키우기, 톡 눌러 고르기
     const pts = new Map(); let moved = 0, pd = 0;
@@ -103,7 +115,7 @@ const LawMap = (() => {
     box.querySelector('.zout').onclick = () => zoomAt(W / 2, H / 2, 1 / 1.6);
     box.querySelector('.zall').onclick = () => { pick(-1); onEnter(-1); V.s = fit; V.x = W / 2; V.y = H / 2; moving = true; kick(); settle(); };
     size();
-    if (focusId != null && focusId >= 0 && focusId < N) { V.s = fit * 7; V.x = W / 2 - m.x[focusId] * V.s; V.y = H / 2 - m.y[focusId] * V.s; pick(focusId); }
+    if (focusId != null && focusId >= 0 && focusId < N) pick(focusId);
     drawBase(); kick();
     addEventListener('resize', onResize);
     function onResize() { if (!alive || !cv.isConnected) return; const s = V.s / fit, cx = (W / 2 - V.x) / V.s, cy = (H / 2 - V.y) / V.s; size(); V.s = fit * s; V.x = W / 2 - cx * V.s; V.y = H / 2 - cy * V.s; drawBase(); kick(); }
