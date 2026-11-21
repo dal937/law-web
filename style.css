@@ -40,3 +40,5 @@ h3{font-size:14px;margin:16px 0 2px}.tag{font-size:11px;border:1px solid var(--b
 .map .zb .zall{font-size:11px}.mpick{margin:8px 10px 0}.mlegend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;color:var(--ink2);margin:8px 16px 0}.mlegend i{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:5px}
 .mlegend .btn{display:inline-flex;align-items:center;padding:6px 10px;font-size:12.5px}
 .map .ttl{display:none}
+canvas.loom{display:block;width:100%;border-radius:10px;background:#07090d;touch-action:pan-y}
+#c-loom .pick{flex-wrap:wrap}#c-loom .pick .nm{flex:1 1 100%}
