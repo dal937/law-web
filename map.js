@@ -2,6 +2,7 @@
 // 전체 지도: 법령 하나 = 점 하나, 서로 부르는 법끼리 줄. 자리는 pipeline/layout.mjs가 미리 셈함.
 const LawMap = (() => {
   const COL = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#3fae3f', '#9085e9', '#e66767'];
+  const KCOL = ['#8fc1ff', '#ff9a5c', '#4fd6a0'];      // 법 종류 색(베틀과 같음): 헌법·법률 · 대통령령 · 그 밖 규칙
   const BG = '#07090d';
   let M = null, raf = 0, alive = false;
   const data = () => M || (M = fetch('data/map.json').then(r => r.json()));
@@ -13,7 +14,8 @@ const LawMap = (() => {
     const cv = box.querySelector('canvas'), ctx = cv.getContext('2d'), base = document.createElement('canvas'), bx = base.getContext('2d');
     const dpr = Math.min(2, devicePixelRatio || 1); let W = 0, H = 0;
     const V = { s: 1, x: 0, y: 0 }, B = { s: 1, x: 0, y: 0 };       // V = 지금 보는 자리, B = 바탕 그림을 그린 자리
-    let sel = -1, adj = null, adjW = null, selTop = [], timer = 0;
+    let sel = -1, adj = null, adjW = null, selTop = [], timer = 0, byKind = false;
+    const KI = IDX.laws.map(l => (l[1] === '헌법' || l[1] === '법률') ? 0 : l[1] === '대통령령' ? 1 : 2), cg = i => byKind ? KI[i] : m.g[i], pal = () => byKind ? KCOL : COL;
     const order = [...Array(N).keys()].sort((a, b) => IDX.laws[b][4] - IDX.laws[a][4]);
     const sx = i => m.x[i] * V.s + V.x, sy = i => m.y[i] * V.s + V.y;
     const zoom0 = () => V.s / fit;
@@ -28,20 +30,21 @@ const LawMap = (() => {
       Object.assign(B, V); box.querySelector('.ttl').style.opacity = zoom0() > 1.6 ? 0 : 1; bx.globalCompositeOperation = 'source-over'; bx.fillStyle = BG; bx.fillRect(0, 0, W, H);
       bx.lineWidth = Math.max(.5, .4 * dpr); const far = zoom0() < 1.8;
       const zoom = zoom0(), lim = Math.min(ne, Math.round(30000 * Math.max(1, zoom)));       // 멀리서는 굵은 줄만
-      for (let g = 0; g < 8; g++) {
-        bx.beginPath(); bx.strokeStyle = COL[g]; bx.globalAlpha = far ? .11 : .2;
-        for (let k = 0; k < lim; k++) { const a = E[k * 3], b = E[k * 3 + 1]; if (m.g[a] !== g) continue;
+      const PAL = pal(), ng = PAL.length;
+      for (let g = ng - 1; g >= 0; g--) {
+        bx.beginPath(); bx.strokeStyle = PAL[g]; bx.globalAlpha = (far ? .11 : .2) * (byKind ? .6 : 1);
+        for (let k = 0; k < lim; k++) { const a = E[k * 3], b = E[k * 3 + 1]; if (cg(a) !== g) continue;
           const x1 = sx(a), y1 = sy(a), x2 = sx(b), y2 = sy(b), in1 = x1 > 0 && x1 < W && y1 > 0 && y1 < H, in2 = x2 > 0 && x2 < W && y2 > 0 && y2 < H;
           if (!in1 && !in2) continue; if (!far && !(in1 && in2) && k > 6000) continue;      // 가까이서는 화면을 그냥 지나가는 가는 줄은 뺌
           bx.moveTo(x1, y1); bx.lineTo(x2, y2); }
         bx.stroke();
       }
-      for (let g = 0; g < 8; g++) {                         // 점 + 큰 법의 빛무리
-        bx.fillStyle = COL[g];
+      for (let g = ng - 1; g >= 0; g--) {                   // 점 + 큰 법의 빛무리
+        bx.fillStyle = PAL[g];
         bx.globalAlpha = .12; bx.beginPath();
-        for (let i = 0; i < N; i++) if (m.g[i] === g && IDX.laws[i][4] > 150) { const x = sx(i), y = sy(i); bx.moveTo(x, y); bx.arc(x, y, rad(i) * 3.2, 0, 6.3); }
+        for (let i = 0; i < N; i++) if (cg(i) === g && IDX.laws[i][4] > 150) { const x = sx(i), y = sy(i); bx.moveTo(x, y); bx.arc(x, y, rad(i) * 3.2, 0, 6.3); }
         bx.fill(); bx.globalAlpha = .95; bx.beginPath();
-        for (let i = 0; i < N; i++) if (m.g[i] === g) { const x = sx(i), y = sy(i); if (x < -9 || y < -9 || x > W + 9 || y > H + 9) continue; bx.moveTo(x, y); bx.arc(x, y, rad(i), 0, 6.3); }
+        for (let i = 0; i < N; i++) if (cg(i) === g) { const x = sx(i), y = sy(i); if (x < -9 || y < -9 || x > W + 9 || y > H + 9) continue; bx.moveTo(x, y); bx.arc(x, y, rad(i), 0, 6.3); }
         bx.fill();
       }
       bx.globalCompositeOperation = 'source-over'; bx.globalAlpha = 1; bx.font = `${11.5 * dpr}px system-ui,"Noto Sans KR","WenQuanYi Zen Hei",sans-serif`; bx.textAlign = 'center';
@@ -68,7 +71,7 @@ const LawMap = (() => {
       ctx.globalCompositeOperation = 'lighter';
       for (let i = 0; i < P.length; i++) { const p = P[i]; p.t += p.v; if (p.t >= 1) { P[i] = spawn(); continue; }
         const x = sx(p.a) + (sx(p.b) - sx(p.a)) * p.t, y = sy(p.a) + (sy(p.b) - sy(p.a)) * p.t; if (x < 0 || y < 0 || x > W || y > H) continue;
-        ctx.globalAlpha = Math.sin(p.t * Math.PI) * .9; ctx.fillStyle = COL[m.g[p.a]]; ctx.beginPath(); ctx.arc(x, y, 1.5 * dpr, 0, 6.3); ctx.fill(); }
+        ctx.globalAlpha = Math.sin(p.t * Math.PI) * .9; ctx.fillStyle = pal()[cg(p.a)]; ctx.beginPath(); ctx.arc(x, y, 1.5 * dpr, 0, 6.3); ctx.fill(); }
       if (sel >= 0) {                                         // 고른 법과 그 줄: 바탕을 어둡게 하고, 많이 주고받는 법은 이름을 띄움
         ctx.globalCompositeOperation = 'source-over'; ctx.globalAlpha = .58; ctx.fillStyle = BG; ctx.fillRect(0, 0, W, H);
         const many = adj[sel].length > 150; ctx.globalAlpha = many ? .1 : .4; ctx.strokeStyle = '#ffffff'; ctx.lineWidth = .7 * dpr; ctx.beginPath();
@@ -76,9 +79,9 @@ const LawMap = (() => {
         ctx.globalAlpha = many ? .45 : .9; ctx.beginPath(); for (const j of adj[sel]) { ctx.fillStyle = '#ffffff'; ctx.moveTo(sx(j), sy(j)); ctx.arc(sx(j), sy(j), 1.6 * dpr, 0, 6.3); } ctx.fill();
         ctx.globalAlpha = 1; ctx.font = `600 ${11.5 * dpr}px system-ui,"Noto Sans KR","WenQuanYi Zen Hei",sans-serif`; ctx.textAlign = 'center'; const boxes = [];
         const name = (i, bold) => { const x = sx(i), y = sy(i); if (x < 20 || y < 14 || x > W - 20 || y > H - 6) return; const n = IDX.laws[i][0], t = n.length > 13 ? n.slice(0, 12) + '…' : n, w = ctx.measureText(t).width / 2 + 4, yy = y - rad(i) - 7 * dpr;
-          if (boxes.some(b => Math.abs(b[0] - x) < b[2] + w && Math.abs(b[1] - yy) < 14 * dpr)) return; boxes.push([x, yy, w]); ctx.strokeStyle = BG; ctx.lineWidth = 3.5 * dpr; ctx.strokeText(t, x, yy); ctx.fillStyle = bold ? '#ffffff' : COL[m.g[i]]; ctx.fillText(t, x, yy); };
+          if (boxes.some(b => Math.abs(b[0] - x) < b[2] + w && Math.abs(b[1] - yy) < 14 * dpr)) return; boxes.push([x, yy, w]); ctx.strokeStyle = BG; ctx.lineWidth = 3.5 * dpr; ctx.strokeText(t, x, yy); ctx.fillStyle = bold ? '#ffffff' : pal()[cg(i)]; ctx.fillText(t, x, yy); };
         ctx.strokeStyle = '#ffffff'; ctx.lineWidth = 2 * dpr; ctx.beginPath(); ctx.arc(sx(sel), sy(sel), rad(sel) + 4 * dpr, 0, 6.3); ctx.stroke(); name(sel, true);
-        for (const [j] of selTop) { ctx.strokeStyle = COL[m.g[j]]; ctx.lineWidth = 1.8 * dpr; ctx.globalAlpha = .95; ctx.beginPath(); ctx.moveTo(sx(sel), sy(sel)); ctx.lineTo(sx(j), sy(j)); ctx.stroke(); ctx.fillStyle = COL[m.g[j]]; ctx.beginPath(); ctx.arc(sx(j), sy(j), 3.2 * dpr, 0, 6.3); ctx.fill(); }
+        for (const [j] of selTop) { ctx.strokeStyle = pal()[cg(j)]; ctx.lineWidth = 1.8 * dpr; ctx.globalAlpha = .95; ctx.beginPath(); ctx.moveTo(sx(sel), sy(sel)); ctx.lineTo(sx(j), sy(j)); ctx.stroke(); ctx.fillStyle = pal()[cg(j)]; ctx.beginPath(); ctx.arc(sx(j), sy(j), 3.2 * dpr, 0, 6.3); ctx.fill(); }
         for (const [j] of selTop) name(j, false);
       }
       raf = (still && sel < 0 && !moving) ? 0 : requestAnimationFrame(frame);
@@ -86,16 +89,17 @@ const LawMap = (() => {
     let moving = false;
     const kick = () => { if (!raf && alive) raf = requestAnimationFrame(frame); };
     const settle = () => { clearTimeout(timer); timer = setTimeout(() => { moving = false; drawBase(); kick(); }, 140); };
+    let lastTop = []; const emit = () => onPick(sel, sel >= 0 ? adj[sel].length : 0, sel >= 0 ? m.groups[m.g[sel]] : '', sel >= 0 ? m.g[sel] : 0, lastTop, m.g);
     function pick(i) {
       if (!adj) { adj = Array.from({ length: N }, () => []); adjW = Array.from({ length: N }, () => []); for (let k = 0; k < ne; k++) { const a = E[k * 3], b = E[k * 3 + 1], w = E[k * 3 + 2]; adj[a].push(b); adjW[a].push(w); adj[b].push(a); adjW[b].push(w); } }
       const L = IDX.laws, kin = j => L[i][6] === j || L[j][6] === i || (L[i][6] >= 0 && L[i][6] === L[j][6]);       // 딸린 시행령·시행규칙은 뺌(줄은 굵은 차례로 들어 있음)
       const top = i >= 0 ? adj[i].map((j, k) => [j, adjW[i][k]]).filter(x => !kin(x[0])) : [];
-      sel = i; selTop = top.slice(0, 6); if (i >= 0) frameSel(); onPick(i, i >= 0 ? adj[i].length : 0, i >= 0 ? m.groups[m.g[i]] : '', i >= 0 ? m.g[i] : 0, top, m.g); kick();
+      sel = i; selTop = top.slice(0, 6); lastTop = top; if (i >= 0) frameSel(); emit(); kick();
     }
     // 고른 법과 많이 주고받는 법 여섯이 한 화면에 들게 자리를 옮김
     function frameSel() { const ids = [sel, ...selTop.map(x => x[0])], xs = ids.map(i => m.x[i]), ys = ids.map(i => m.y[i]), x0 = Math.min(...xs), x1 = Math.max(...xs), y0 = Math.min(...ys), y1 = Math.max(...ys);
       V.s = Math.max(fit * 1.9, Math.min(fit * 9, W * .7 / Math.max(1, x1 - x0), H * .7 / Math.max(1, y1 - y0))); V.x = W / 2 - (x0 + x1) / 2 * V.s; V.y = H / 2 - (y0 + y1) / 2 * V.s; moving = true; settle(); }
-    box.focus = i => { pick(i); };
+    box.focus = i => { pick(i); }; box.col = i => pal()[cg(i)];
     function zoomAt(px, py, f) { const s = Math.max(fit * .7, Math.min(fit * 60, V.s * f)); f = s / V.s; V.x = px - (px - V.x) * f; V.y = py - (py - V.y) * f; V.s = s; moving = true; kick(); settle(); }
     // 손가락: 하나로 끌기, 둘로 벌려 키우기, 톡 눌러 고르기
     const pts = new Map(); let moved = 0, pd = 0;
@@ -111,6 +115,7 @@ const LawMap = (() => {
     cv.onwheel = ev => { ev.preventDefault(); const p = pos(ev); zoomAt(p[0], p[1], ev.deltaY < 0 ? 1.25 : .8); };
     function enter(g) { V.s = fit * 2.6; V.x = W / 2 - m.cen[g][0] * V.s; V.y = H / 2 - m.cen[g][1] * V.s; pick(-1); onEnter(g); moving = true; kick(); settle(); }
     box.enter = enter;
+    box.kind = on => { byKind = on; drawBase(); if (sel >= 0) emit(); kick(); };
     box.querySelector('.zin').onclick = () => zoomAt(W / 2, H / 2, 1.6);
     box.querySelector('.zout').onclick = () => zoomAt(W / 2, H / 2, 1 / 1.6);
     box.querySelector('.zall').onclick = () => { pick(-1); onEnter(-1); V.s = fit; V.x = W / 2; V.y = H / 2; moving = true; kick(); settle(); };
@@ -122,5 +127,5 @@ const LawMap = (() => {
     return m;
   }
   function stop() { alive = false; cancelAnimationFrame(raf); raf = 0; }
-  return { mount, stop, COL };
+  return { mount, stop, COL, KCOL };
 })();

@@ -41,15 +41,18 @@ function home(focus) {
   LawMap.mount($('.map'), IDX, (i, nb, grp, gi, top, G) => {
     if (i < 0) return;
     const l = L(i); NB = top; NB.name = l.name;
-    mp.innerHTML = `<i class="dot" style="background:${LawMap.COL[gi]}"></i><span class="nm">${esc(l.name)}<br><span class="num">${esc(l.kind)} · ${esc(grp)} · 이어진 법 ${nf(nb)}개</span></span><a class="btn" href="${href(i)}">열기</a>
-<div class="nbs">${top.length ? `<span class="num">많이 주고받는 법 — 누르면 그 법으로 옮겨 감</span>${top.slice(0, 6).map(([j, w]) => `<button class="btn" data-i="${j}"><i style="background:${LawMap.COL[G[j]]}"></i>${esc(cut(L(j).name, 14))} <span class="num">${nf(w)}</span></button>`).join('')}${top.length > 6 ? `<button class="btn" id="nb-more">외 ${nf(top.length - 6)}개</button>` : ''}` : '<span class="num">두 번 넘게 주고받는 다른 법이 없습니다.</span>'}</div>`;
+    mp.innerHTML = `<i class="dot" style="background:${$('.map').col(i)}"></i><span class="nm">${esc(l.name)}<br><span class="num">${esc(l.kind)} · ${esc(grp)} · 이어진 법 ${nf(nb)}개</span></span><a class="btn" href="${href(i)}">열기</a>
+<div class="nbs">${top.length ? `<span class="num">많이 주고받는 법 — 누르면 그 법으로 옮겨 감</span>${top.slice(0, 6).map(([j, w]) => `<button class="btn" data-i="${j}"><i style="background:${$('.map').col(j)}"></i>${esc(cut(L(j).name, 14))} <span class="num">${nf(w)}</span></button>`).join('')}${top.length > 6 ? `<button class="btn" id="nb-more">외 ${nf(top.length - 6)}개</button>` : ''}` : '<span class="num">두 번 넘게 주고받는 다른 법이 없습니다.</span>'}</div>`;
   }, focus, g => {
     if (g < 0 || !MAPM) { mp.innerHTML = `<span class="nm muted">가운데가 헌법, 둘레 여덟 덩어리가 분야입니다. 덩어리를 누르면 그 분야로 들어갑니다.</span>`; return; }
     const m = MAPM, top = all.filter(l => m.g[l.id] === g).sort((a, b) => b.ind - a.ind).slice(0, 3), to = m.flow[g].map((n, k) => [k, n + m.flow[k][g]]).filter(x => x[0] !== g).sort((a, b) => b[1] - a[1])[0];
     mp.innerHTML = `<i class="dot" style="background:${LawMap.COL[g]}"></i><span class="nm"><b>${esc(m.groups[g])}</b> · 법령 ${nf(m.cen[g][2])}개<br><span class="num">많이 불리는 법: ${top.map(l => esc(cut(l.name, 12))).join(', ')} · 가장 많이 주고받는 분야: ${esc(m.groups[to[0]])}</span><br><span class="num">점을 누르면 그 법의 줄이 켜집니다.</span></span>`;
   }).then(m => { if (!m) return; MAPM = m; MAPG = m.g;
-    $('#mleg').innerHTML = m.groups.map((g, k) => `<button class="btn" data-g="${k}"><i style="background:${LawMap.COL[k]}"></i>${esc(g)}</button>`).join('');
-    $('#mleg').onclick = ev => { const b = ev.target.closest('button[data-g]'); if (b) { $('.map').enter(+b.dataset.g); $('.map').scrollIntoView({ block: 'start' }); } };
+    const kn = [0, 0, 0]; all.forEach(l => kn[kc(l.kind)[1] - 1]++); let byKind = false;
+    const leg = () => { $('#mleg').innerHTML = (byKind ? ['헌법·법률', '시행령(대통령령)', '시행규칙(부령)·그 밖 규칙'].map((t, k) => `<span><i style="background:${LawMap.KCOL[k]}"></i>${t} ${nf(kn[k])}개</span>`).join('') : m.groups.map((g, k) => `<button class="btn" data-g="${k}"><i style="background:${LawMap.COL[k]}"></i>${esc(g)}</button>`).join(''))
+      + `<button class="btn" id="mkind" style="flex:1 1 100%;justify-content:center">${byKind ? '색을 분야로 되돌리기' : '색을 법 종류로 보기 — 법률 · 시행령 · 시행규칙'}</button>`; };
+    leg();
+    $('#mleg').onclick = ev => { const b = ev.target.closest('button[data-g]'); if (ev.target.closest('#mkind')) { byKind = !byKind; $('.map').kind(byKind); leg(); } else if (b) { $('.map').enter(+b.dataset.g); $('.map').scrollIntoView({ block: 'start' }); } };
     const tot = m.flow.flat().reduce((a, b) => a + b, 0), self = m.flow.reduce((a, r, k) => a + r[k], 0), prs = [];
     for (let a = 0; a < 8; a++) for (let b = a + 1; b < 8; b++) prs.push([a, b, m.flow[a][b] + m.flow[b][a]]); prs.sort((x, y) => y[2] - x[2]);
     const big = all.slice().sort((a, b) => b.ind - a.ind)[0], lone = all.filter(l => l.nb === 0).length;
@@ -115,6 +118,9 @@ async function loom(P) {
   const recv = new Uint16Array(n0); T.forEach(t => { if (t[2] === 0) { recv[t[3]]++; CH[chIx[t[3]]].t++; } });
   const live = CH.filter(h => h.c && !/삭제/.test(h.c)), isPen = i => /벌칙|과태료|양벌/.test(root.arts[i][1]) || chapOf(root, i).includes('벌칙');
   const penA = A[0].filter(a => isPen(a[0]) && !isPen(a[1])), penT = new Map(); penA.forEach(a => penT.set(a[1], (penT.get(a[1]) || 0) + 1));
+  // 중심: 조마다 기대는 횟수 = 같은 법의 조가 가리킨 횟수 + 아래 법이 받아 쓴 횟수
+  const LEAN = fam.map(x => new Uint16Array(x.arts.length)); A.forEach((as, r) => as.forEach(a => LEAN[r][a[1]]++)); T.forEach(t => LEAN[t[2]][t[3]]++);
+  const rankL = LEAN.map(w => [...w.keys()].sort((a, b) => w[b] - w[a])), TOP = rankL.map((o, r) => o.slice(0, 10).filter(i => LEAN[r][i] >= 3)), BR = (r, i) => Math.min(7.5, 2.2 + Math.sqrt(LEAN[r][i]) * .55);
   const an = (r, i) => `${fmt(fam[r].arts[i][0])} ${esc(cut(fam[r].arts[i][1], 18))}`, READ = [], down = T.filter(t => t[2] === 0);
   if (down.length) { const got = recv.reduce((s, v) => s + (v > 0), 0), top = recv.indexOf(Math.max(...recv));
     READ.push([`<b>${esc(root.name)}</b> ${nf(n0)}조 가운데 <b>${nf(got)}조(${Math.round(got / n0 * 100)}%)</b>는 아래 법이 받아 풀어 씁니다 — 법률만 읽어서는 끝나지 않는 조들.`, () => lit(down, [], null, `아래 법이 받아 쓰는 실 ${nf(down.length)}가닥`)]);
@@ -123,11 +129,13 @@ async function loom(P) {
     READ.push([`아래로 가장 촘촘히 넘긴 대목은 <b>${esc(short(best.c))}</b>(조 ${best.i1 - best.i0 + 1}개에 실 ${nf(best.t)}가닥)${none.length ? ` · 하나도 안 넘긴 대목은 ${none.slice(0, 3).map(h => esc(short(h.c))).join(', ')}` : ''}.`, () => chapter(CH.indexOf(best))]); }
   if (penT.size >= 10 && penA.length / A[0].length >= .1) { const tp = [...penT].sort((a, b) => b[1] - a[1])[0][0];
     READ.push([`<b>벌칙</b> 조들이 앞의 조 <b>${nf(penT.size)}개</b>를 가리킵니다 — 어기면 벌이 따르는 조들(법 안 활의 ${Math.round(penA.length / A[0].length * 100)}%). 가장 여러 번 걸린 조는 ${an(0, tp)}.`, () => lit([], penA.map(a => [0, a]), null, `벌칙이 가리키는 조 ${nf(penT.size)}개 — 붉은 활`, RED)]); }
+  { const tot = LEAN[0].reduce((a, b) => a + b, 0); let k = 0, cum = 0; while (k < n0 && cum < tot / 2) cum += LEAN[0][rankL[0][k++]]; const zero = LEAN[0].reduce((s, v) => s + !v, 0);
+    if (tot >= 20) READ.unshift([`<b>중심</b>: ${nf(n0)}조 가운데 <b>${nf(k)}조(${Math.max(1, Math.round(k / n0 * 100))}%)</b>가 기대는 줄의 절반을 받습니다 — 가장 큰 기둥은 ${rankL[0].slice(0, 3).map(i => `<b>${an(0, i)}</b>`).join(', ')}. 아무도 기대지 않는 조는 ${nf(zero)}개(${Math.round(zero / n0 * 100)}%).`, () => centre(k)]); }
   const r1 = fam.findIndex(x => rk(x) === 1), pr = r1 > 0 ? T.filter(t => t[0] === r1 && t[2] === 0) : [];
   if (pr.length >= 20) { const xs = pr.map(t => t[1]), ys = pr.map(t => t[3]), mean = v => v.reduce((a, b) => a + b, 0) / v.length, mx = mean(xs), my = mean(ys); let sxy = 0, sxx = 0, syy = 0; xs.forEach((x, k) => { sxy += (x - mx) * (ys[k] - my); sxx += (x - mx) ** 2; syy += (ys[k] - my) ** 2; }); const cor = sxy / Math.sqrt(sxx * syy || 1);
     if (cor >= .8) READ.push(['<b>시행령</b>은 법률의 차례를 거의 그대로 따라 씁니다 — 주황 실이 곧게 내려가는 까닭. 법률 조 옆에 시행령 조를 나란히 놓고 읽으면 됩니다.', () => lit(pr, [], null, `시행령이 법률을 받아 쓰는 실 ${nf(pr.length)}가닥`)]); }
   const mxT = Math.max(1, ...live.map(h => h.t));
-  $('#c-loom').innerHTML = `<div class="card"><h2>베틀 — 이 법 집안이 짜이는 모습</h2><p class="sub">가로줄 = 조를 제1조부터 차례로(끊긴 곳이 장의 경계). 위로 솟은 활 = 같은 법 안에서 조가 조를 부름. 세로 실 = 아래 법이 윗법의 조를 받아 풀어 씀(${nf(T.length)}가닥).</p>
+  $('#c-loom').innerHTML = `<div class="card"><h2>베틀 — 이 법 집안이 짜이는 모습</h2><p class="sub">가로줄 = 조를 제1조부터 차례로(끊긴 곳이 장의 경계). 위로 솟은 활 = 같은 법 안에서 조가 조를 부름. 세로 실 = 아래 법이 윗법의 조를 받아 풀어 씀(${nf(T.length)}가닥). 구슬 = 많이 기대는 조(같은 법의 조와 아래 법이 가리킨 횟수) — 클수록 중심. 조를 고르면 실을 따라 끝까지 가고, 건너간 실은 점선입니다.</p>
 <canvas class="loom" aria-label="법률과 시행령·시행규칙 사이에 걸린 줄"></canvas><div class="lsel"></div>
 ${READ.length ? `<h3>이 그림에서 읽히는 것 <span class="num" style="font-weight:400">누르면 그 부분이 켜짐</span></h3><ul class="list lread">${READ.map((x, k) => `<li><button data-read="${k}"><span class="nm">${x[0]}</span></button></li>`).join('')}</ul>` : ''}
 ${live.length >= 2 ? `<h3>대목별 — 어디를 아래 법에 넘겼나</h3><ul class="list lch">${live.map(h => `<li><button data-ch="${CH.indexOf(h)}"><span class="nm">${esc(short(h.c))}</span><span class="lbar"><i style="width:${(h.t / mxT * 100).toFixed(0)}%"></i></span><span class="num">${h.i1 - h.i0 + 1}조 · ${nf(h.t)}가닥</span></button></li>`).join('')}</ul>` : ''}</div>`;
@@ -137,9 +145,12 @@ ${live.length >= 2 ? `<h3>대목별 — 어디를 아래 법에 넘겼나</h3><u
   const thread = t => { const x1 = X(t[0], t[1]), y1 = Y(t[0]), x2 = X(t[2], t[3]), y2 = Y(t[2]), my = (y1 + y2) / 2; c.moveTo(x1, y1); c.bezierCurveTo(x1, my, x2, my, x2, y2); };
   const arc = (r, a) => { const p = X(r, Math.min(a[0], a[1])), q = X(r, Math.max(a[0], a[1])), rad = (q - p) / 2; c.moveTo(p, Y(r)); c.ellipse(p + rad, Y(r), rad, Math.min(rad, 58), 0, Math.PI, 2 * Math.PI); };
   const stroke = (f, color, w, al) => { c.beginPath(); f(); c.strokeStyle = color; c.lineWidth = w; c.globalAlpha = al; c.stroke(); c.globalAlpha = 1; };
-  const chrome = () => fam.forEach((x, r) => { stroke(() => { c.moveTo(pad, Y(r)); c.lineTo(W - pad, Y(r)); }, col(r), 2.5, 1);
+  const lines = () => fam.forEach((x, r) => { stroke(() => { c.moveTo(pad, Y(r)); c.lineTo(W - pad, Y(r)); }, col(r), 2.5, 1);
     stroke(() => bounds[r].forEach(i => { const bx = (X(r, i - 1) + X(r, i)) / 2; c.moveTo(bx, Y(r) - 5); c.lineTo(bx, Y(r) + 5); }), BG, 2, 1);
-    c.fillStyle = col(r); c.font = `${x.id === d.id ? 800 : 600} 12px system-ui,"Noto Sans KR",sans-serif`; c.fillText(`${x.id === d.id ? '● ' : ''}${cut(x.name, 22)} · ${nf(x.arts.length)}조`, pad, Y(r) + 19); });
+    TOP[r].forEach(i => { c.beginPath(); c.arc(X(r, i), Y(r), BR(r, i), 0, 7); c.fillStyle = col(r); c.fill(); c.lineWidth = 1.5; c.strokeStyle = BG; c.stroke(); }); });      // 구슬 = 많이 기대는 조
+  const labels = () => fam.forEach((x, r) => { const t = `${x.id === d.id ? '● ' : ''}${cut(x.name, 22)} · ${nf(x.arts.length)}조`; c.font = `${x.id === d.id ? 800 : 600} 12px system-ui,"Noto Sans KR",sans-serif`;
+    c.lineJoin = 'round'; c.lineWidth = 5; c.strokeStyle = BG; c.strokeText(t, pad, Y(r) + 19); c.fillStyle = col(r); c.fillText(t, pad, Y(r) + 19); });      // 이름표는 실 위에 — 가려지지 않게 테두리를 두름
+  const chrome = () => { lines(); labels(); };
   const arcsAll = () => A.forEach((as, r) => { const st = Math.ceil(as.length / 1500); stroke(() => { for (let k = 0; k < as.length; k += st) arc(r, as[k]); }, col(r), .5, .42); });
   T.sort((a, b) => X(a[0], a[1]) - X(b[0], b[1])); const st = Math.ceil(T.length / 6000), al = T.length > 1500 ? .22 : .34; let base = null, sel = null;
   const hint = () => { sel = null; box.innerHTML = '<div class="pick"><span class="nm muted">그림을 누르거나 좌우로 문지르면 조 하나에 걸린 실과 이어진 조 이름이 나옵니다.</span></div>'; };
@@ -147,11 +158,13 @@ ${live.length >= 2 ? `<h3>대목별 — 어디를 아래 법에 넘겼나</h3><u
   const full = () => { c.fillStyle = BG; c.fillRect(0, 0, W, H); arcsAll(); for (let r = 0; r < fam.length; r++) stroke(() => { for (let k = 0; k < T.length; k += st) if (T[k][0] === r) thread(T[k]); }, col(r), .6, al); chrome(); snap(); };
   const dot = (r, i, rad, f) => { c.beginPath(); c.arc(X(r, i), Y(r), rad, 0, 7); c.fillStyle = f; c.fill(); };
   // 켜기: 실(ts)·활(as = [줄, 활])만 밝히고 나머지는 어둡게
-  function lit(ts, as, mark, label, acol = '#f0efec', seg) {
-    if (!base) full(); c.drawImage(base, 0, 0, W, H); c.fillStyle = 'rgba(7,9,13,.74)'; c.fillRect(0, 0, W, H); chrome();
+  function lit(ts, as, mark, label, acol = '#f0efec', seg, ts2 = [], marks = []) {
+    if (!base) full(); c.drawImage(base, 0, 0, W, H); c.fillStyle = 'rgba(7,9,13,.74)'; c.fillRect(0, 0, W, H); lines();
     stroke(() => as.forEach(a => arc(a[0], a[1])), acol, as.length > 40 ? .8 : 1.1, .85);
     for (let r = 0; r < fam.length; r++) stroke(() => ts.forEach(t => { if (t[0] === r) thread(t); }), col(r), ts.length > 60 ? .8 : 1.4, .92);
-    if (ts.length <= 60) ts.forEach(t => { dot(t[2], t[3], 2.5, col(t[2])); dot(t[0], t[1], 2.5, col(t[0])); });
+    c.setLineDash([5, 4]); for (let r = 0; r < fam.length; r++) stroke(() => ts2.forEach(t => { if (t[0] === r) thread(t); }), col(r), 1.1, .8); c.setLineDash([]);
+    if (ts.length + ts2.length <= 80) [...ts, ...ts2].forEach(t => { dot(t[2], t[3], 2.5, col(t[2])); dot(t[0], t[1], 2.5, col(t[0])); });
+    labels(); marks.forEach(m => dot(m[0], m[1], BR(m[0], m[1]) + 1, '#f0efec'));
     if (seg) stroke(() => { c.moveTo(X(0, seg[0]), Y(0)); c.lineTo(X(0, seg[1]), Y(0)); }, '#ffffff', 4, 1);
     if (mark) dot(mark[0], mark[1], 5.5, '#f0efec');
     if (label != null) { sel = null; box.innerHTML = `<div class="pick"><span class="nm">${label}</span><button class="btn" id="lm-all">전체</button></div>`; }
@@ -159,19 +172,34 @@ ${live.length >= 2 ? `<h3>대목별 — 어디를 아래 법에 넘겼나</h3><u
   const hop = (title, items) => { const seen = new Set(), u = items.filter(([r, i]) => !seen.has(r + '_' + i) && seen.add(r + '_' + i)); return u.length ? `<h4>${title} ${u.length}</h4><ul class="list">${u.slice(0, 6).map(([r, i, tag]) => `<li><button data-r="${r}" data-i="${i}"><i class="dot" style="background:${col(r)}"></i><span class="nm">${an(r, i)}</span>${tag ? `<span class="tag">${tag}</span>` : ''}</button></li>`).join('')}${u.length > 6 ? `<li><span class="note">외 ${nf(u.length - 6)}개 — '읽기'에서 모두 봅니다</span></li>` : ''}</ul>` : ''; };
   function choose(r, i) {
     const up = T.filter(t => t[0] === r && t[1] === i), dn = T.filter(t => t[2] === r && t[3] === i), ar = A[r].filter(a => a[0] === i || a[1] === i);
-    lit([...up, ...dn], ar.map(a => [r, a]), [r, i], null); sel = [r, i];
-    const a = fam[r].arts[i], ch = chapOf(fam[r], i), nm2 = k => esc(cut(fam[k].name.replace(root.name, '').trim() || fam[k].name, 8));
-    box.innerHTML = `<div class="pick"><i class="dot" style="background:${col(r)}"></i><span class="nm"><b>${esc(cut(fam[r].name, 16))} ${fmt(a[0])}</b> ${esc(a[1])}${ch ? `<br><span class="num" style="white-space:normal">${esc(ch)}</span>` : ''}</span><a class="btn" href="${href(fam[r].id, a[0])}">읽기</a><button class="btn" id="lm-all">전체</button></div>
-${hop('이 조가 받아 쓰는 윗법의 조', up.map(t => [t[2], t[3], nm2(t[2])]))}${hop('이 조를 받아 풀어 쓰는 아래 법의 조', dn.map(t => [t[0], t[1], nm2(t[0])]))}${hop('같은 법 안에서 이어진 조', ar.map(x => x[0] === i ? [r, x[1], '가리킴'] : [r, x[0], isPen(x[0]) && r === 0 ? '벌칙' : '가리켜짐']))}
-${!(up.length + dn.length + ar.length) ? '<p class="note">이 조에는 걸린 실이 없습니다 — 다른 조에 기대지 않고 혼자 서는 조.</p>' : ''}<p class="note">이어진 조를 누르면 그 조로 옮겨 갑니다.</p>`;
+    // 따라가기: 이 조를 받은 조를 다시 받아 쓰는 조(dn2) · 이 조가 받는 조가 다시 받는 조(up2)를 끝까지 — [실, 거쳐 온 실]
+    // 윗법의 조를 여럿(HUB 넘게) 한꺼번에 받는 조(권한의 위임 따위)는 어느 조 때문인지 알 수 없어 건너가지 않음
+    const seen = new Set([...up, ...dn]); let hubs = 0;
+    const walk = (near, m, end) => { const o = []; let front = near; for (let dep = 0; dep < 3 && front.length; dep++) { const nx = []; front.forEach(t => { const k = end(t), nxt = m.get(k) || []; if (!nxt.length) return; if ((byFrom.get(k) || []).length > HUB) { hubs++; return; }
+      nxt.forEach(u => { if (!seen.has(u)) { seen.add(u); o.push([u, t]); nx.push(u); } }); }); front = nx; } return o; };
+    const dn2 = walk(dn, byTo, t => t[0] + '_' + t[1]), up2 = walk(up, byFrom, t => t[2] + '_' + t[3]), two = [...dn2, ...up2].slice(0, 200).map(x => x[0]);
+    lit([...up, ...dn], ar.map(a => [r, a]), [r, i], null, undefined, undefined, two); sel = [r, i];
+    const a = fam[r].arts[i], ch = chapOf(fam[r], i), nm2 = k => esc(cut(fam[k].name.replace(root.name, '').trim() || fam[k].name, 8)), via = (k, j) => `${nm2(k)} ${fmt(fam[k].arts[j][0])} 거쳐`;
+    box.innerHTML = `<div class="pick"><i class="dot" style="background:${col(r)}"></i><span class="nm"><b>${esc(cut(fam[r].name, 16))} ${fmt(a[0])}</b> ${esc(a[1])}${ch ? `<br><span class="num" style="white-space:normal">${esc(ch)}</span>` : ''}</span><a class="btn" href="${href(fam[r].id, a[0])}">읽기</a><button class="btn" id="lm-all">전체</button>
+<span style="flex:1 1 100%;display:flex;gap:8px">${i > 0 ? `<button class="btn" data-r="${r}" data-i="${i - 1}" style="flex:1">◀ ${fmt(fam[r].arts[i - 1][0])}</button>` : ''}${i < fam[r].arts.length - 1 ? `<button class="btn" data-r="${r}" data-i="${i + 1}" style="flex:1">${fmt(fam[r].arts[i + 1][0])} ▶</button>` : ''}</span></div>
+${hop('이 조가 받아 쓰는 윗법의 조', up.map(t => [t[2], t[3], nm2(t[2])]))}${hop('이 조를 받아 풀어 쓰는 아래 법의 조', dn.map(t => [t[0], t[1], nm2(t[0])]))}${hop('실을 따라 더 아래(점선) — 위의 조를 다시 받아 쓰는 조', dn2.map(([u, t]) => [u[0], u[1], via(t[0], t[1])]))}${hop('실을 따라 더 위(점선) — 위의 조가 다시 받아 쓰는 조', up2.map(([u, t]) => [u[2], u[3], via(t[2], t[3])]))}
+${hop('같은 법 안에서 이어진 조', ar.map(x => x[0] === i ? [r, x[1], '가리킴'] : [r, x[0], isPen(x[0]) && r === 0 ? '벌칙' : '가리켜짐']))}
+${!(up.length + dn.length + ar.length) ? '<p class="note">이 조에는 걸린 실이 없습니다 — 다른 조에 기대지 않고 혼자 서는 조.</p>' : ''}<p class="note">이어진 조를 누르면 그 조로 옮겨 갑니다. 이어짐은 조 단위라 같은 항을 받는지는 '읽기'에서 확인합니다.${hubs ? ` 윗법의 조를 ${HUB}개 넘게 한꺼번에 받는 조(권한의 위임 따위) ${hubs}개는 건너가지 않았습니다.` : ''}</p>`;
   }
+  function centre(k) { const tops = rankL[0].slice(0, k), S = new Set(tops);
+    lit(down.filter(t => S.has(t[3])), A[0].filter(a => S.has(a[1])).map(a => [0, a]), null, null, '#f0efec', null, [], tops.slice(0, 40).map(i => [0, i])); sel = null;
+    box.innerHTML = `<div class="pick"><span class="nm"><b>중심 조 ${nf(k)}개</b><br><span class="num" style="white-space:normal">이 조들로 들어오는 활과 실만 켰습니다 — 기대는 줄의 절반</span></span><button class="btn" id="lm-all">전체</button></div>${hop('많이 기대는 차례', tops.map(i => [0, i, LEAN[0][i] + '곳']))}`; }
   function chapter(k) { const h = CH[k], inC = i => i >= h.i0 && i <= h.i1, ts = down.filter(t => inC(t[3])), tops = [...new Set(ts.map(t => t[3]))].sort((a, b) => recv[b] - recv[a]);
     lit(ts, A[0].filter(a => inC(a[0]) || inC(a[1])).map(a => [0, a]), null, null, '#f0efec', [h.i0, h.i1]); sel = null;
     box.innerHTML = `<div class="pick"><span class="nm"><b>${esc(h.c)}</b><br><span class="num" style="white-space:normal">${fmt(root.arts[h.i0][0])}–${fmt(root.arts[h.i1][0])} · 조 ${h.i1 - h.i0 + 1}개 · 아래 법이 받아 쓴 실 ${nf(ts.length)}가닥</span></span><button class="btn" id="lm-all">전체</button></div>${hop('이 대목에서 많이 받아 쓰인 조', tops.map(i => [0, i, recv[i] + '곳']))}`; }
   const deg = fam.map(x => new Uint16Array(x.arts.length)); T.forEach(t => { deg[t[0]][t[1]]++; deg[t[2]][t[3]]++; });
+  // 한 다리 건너: 조마다 걸린 실을 미리 묶어 둠(받는 쪽·받아 쓰는 쪽)
+  const HUB = 8, byTo = new Map(), byFrom = new Map(), put = (m, k, t) => { const v = m.get(k); if (v) v.push(t); else m.set(k, [t]); };
+  T.forEach(t => { put(byFrom, t[0] + '_' + t[1], t); put(byTo, t[2] + '_' + t[3], t); });
+  const adeg = fam.map(x => new Uint16Array(x.arts.length)); A.forEach((as, r) => as.forEach(a => { adeg[r][a[0]]++; adeg[r][a[1]]++; })); const linked = (r, k) => deg[r][k] + adeg[r][k] > 0;
   const at = ev => { if (!base) return; const b = cv.getBoundingClientRect(), x = ev.clientX - b.left, y = ev.clientY - b.top; let r = 0; for (let k = 1; k < fam.length; k++) if (Math.abs(y + 20 - Y(k)) < Math.abs(y + 20 - Y(r))) r = k;
     const n = fam[r].arts.length; let i = Math.max(0, Math.min(n - 1, Math.round((x - pad) / (W - 2 * pad) * (n - 1)))), best = i; const reach = Math.max(1, Math.round(n / (W - 2 * pad) * 5));
-    for (let k = Math.max(0, i - reach); k <= Math.min(n - 1, i + reach); k++) if (deg[r][k] > deg[r][best]) best = k;
+    if (!linked(r, i)) for (let k = Math.max(0, i - reach); k <= Math.min(n - 1, i + reach); k++) if (linked(r, k) && (!linked(r, best) || Math.abs(k - i) < Math.abs(best - i))) best = k;      // 누른 조에 줄이 있으면 그대로, 없을 때만 가장 가까운 줄 있는 조
     if (!sel || sel[0] !== r || sel[1] !== best) choose(r, best); };
   cv.onpointerdown = ev => { at(ev); cv.onpointermove = at; }; cv.onpointerup = cv.onpointercancel = cv.onpointerleave = () => { cv.onpointermove = null; };
   host.onclick = ev => { const h = ev.target.closest('button[data-r]'), rd = ev.target.closest('button[data-read]'), ch = ev.target.closest('button[data-ch]'), show = () => cv.scrollIntoView({ block: 'nearest' });
@@ -181,7 +209,7 @@ ${!(up.length + dn.length + ar.length) ? '<p class="note">이 조에는 걸린 �
   // 실이 왼쪽부터 걸리며 짜임
   c.fillStyle = BG; c.fillRect(0, 0, W, H); arcsAll(); chrome(); let k0 = 0; const t0 = performance.now(), dur = 1800;
   const step = now => { if (CUR !== P || !cv.isConnected || base) return; const u = Math.max(0, Math.min(1, (now - t0) / dur)), k1 = Math.round(T.length * (1 - Math.pow(1 - u, 2)));
-    for (let k = k0 - k0 % st; k < k1; k += st) if (k >= k0) stroke(() => thread(T[k]), col(T[k][0]), .6, al); k0 = k1;
+    for (let k = k0 - k0 % st; k < k1; k += st) if (k >= k0) stroke(() => thread(T[k]), col(T[k][0]), .6, al); k0 = k1; labels();
     if (u < 1) requestAnimationFrame(step); else full(); };
   requestAnimationFrame(step);
 }
